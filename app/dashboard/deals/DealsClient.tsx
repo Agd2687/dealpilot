@@ -164,7 +164,7 @@ export default function DealsClient() {
 
       {/* PIPELINE */}
       <DragDropContext onDragEnd={onDragEnd}>
-        <div className="grid grid-cols-6 gap-5">
+        <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth">
 
           {stages.map((stage) => {
 
@@ -181,7 +181,7 @@ export default function DealsClient() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className="bg-gradient-to-b from-slate-900 to-slate-800 border border-white/10 rounded-2xl p-4 min-h-[500px]"
+                    className="min-w-[260px] bg-gradient-to-b from-slate-900 to-slate-800 border border-white/10 rounded-2xl p-4"
                   >
                     <h2 className="mb-3 font-semibold">{stage.title}</h2>
 

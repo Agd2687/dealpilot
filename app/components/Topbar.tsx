@@ -8,20 +8,18 @@ export default function Topbar() {
   const router = useRouter()
 
   // UI state
-  const [avatarUrl, setAvatarUrl] = useState("")
-  const [email, setEmail] = useState("")
-  const [fullName, setFullName] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState<string>("")
+  const [email, setEmail] = useState<string>("")
+  const [fullName, setFullName] = useState<string>("")
   const [menuOpen, setMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
 
-  // persisted state (Supabase)
+  // persisted state
   const [isOnline, setIsOnline] = useState(true)
   const [hasUnread, setHasUnread] = useState(true)
 
   // 🔥 LOAD USER + PROFILE
   useEffect(() => {
-    let isMounted = true
-
     const loadProfile = async () => {
       const {
         data: { user },
@@ -29,7 +27,7 @@ export default function Topbar() {
 
       if (!user) return
 
-      if (isMounted) setEmail(user.email || "")
+      setEmail(user.email || "")
 
       const { data, error } = await supabase
         .from("profiles")
@@ -37,61 +35,32 @@ export default function Topbar() {
         .eq("id", user.id)
         .single()
 
-      if (error || !data) return
-
-      // avatar
-      if (data.avatar_url) {
-        const { data: avatarData } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(data.avatar_url)
-
-        if (isMounted) setAvatarUrl(avatarData.publicUrl)
+      if (error) {
+        console.error(error)
+        return
       }
 
-      // name
-      if (data.full_name && isMounted) {
-        setFullName(data.full_name)
-      }
-
-      // status
-      if (data.is_online !== null && isMounted) {
-        setIsOnline(data.is_online)
-      }
-
-      // notifications
-      if (data.has_unread !== null && isMounted) {
-        setHasUnread(data.has_unread)
+      if (data) {
+        setAvatarUrl(data.avatar_url || "")
+        setFullName(data.full_name || "")
+        setIsOnline(data.is_online ?? true)
+        setHasUnread(data.has_unread ?? true)
       }
     }
 
     loadProfile()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  // 🔥 CLOSE DROPDOWNS WHEN CLICK OUTSIDE
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setMenuOpen(false)
-      setNotificationsOpen(false)
-    }
-
-    window.addEventListener("click", handleClickOutside)
-    return () => window.removeEventListener("click", handleClickOutside)
   }, [])
 
   // 🔥 TOGGLE ONLINE STATUS
   const toggleStatus = async () => {
-    const newStatus = !isOnline
-    setIsOnline(newStatus)
-
     const {
       data: { user },
     } = await supabase.auth.getUser()
 
     if (!user) return
+
+    const newStatus = !isOnline
+    setIsOnline(newStatus)
 
     await supabase
       .from("profiles")
@@ -123,11 +92,10 @@ export default function Topbar() {
 
   return (
     <div className="w-full flex items-center justify-between px-6 py-4 border-b border-white/10 bg-black">
+
       {/* LEFT */}
       <div>
-        <h1 className="text-lg font-semibold text-white">
-          DealPilotDashboard
-        </h1>
+        <h1 className="text-lg font-semibold text-white">DealPilotDashboard</h1>
         <p className="text-sm text-white/50">
           Welcome back, {fullName || "User"} 👋
         </p>
@@ -135,6 +103,7 @@ export default function Topbar() {
 
       {/* RIGHT */}
       <div className="flex items-center gap-4 relative">
+
         {/* 🔔 NOTIFICATIONS */}
         <div
           onClick={(e) => {
@@ -144,42 +113,29 @@ export default function Topbar() {
           }}
           className="relative cursor-pointer"
         >
-          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition">
+          <div className="w-9 h-9 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
             🔔
           </div>
 
           {/* GREEN DOT */}
           {hasUnread && (
-            <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+            <span className="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full" />
           )}
         </div>
 
-        {/* 🔔 NOTIFICATION DROPDOWN */}
+        {/* 🔔 DROPDOWN */}
         {notificationsOpen && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute right-20 top-12 w-64 bg-black border border-white/10 rounded-xl shadow-xl p-4 space-y-2"
-          >
-            <p className="text-white/70 text-sm">Notifications</p>
-
-            <div className="bg-white/5 p-2 rounded-lg text-sm">
-              🟢 New deal created
-            </div>
-            <div className="bg-white/5 p-2 rounded-lg text-sm">
-              💡 AI suggests follow-up
-            </div>
-            <div className="bg-white/5 p-2 rounded-lg text-sm">
-              📊 Pipeline updated
+          <div className="absolute right-0 top-12 w-64 bg-black border border-white/10 rounded-xl p-4 shadow-xl z-50">
+            <p className="text-sm text-white/70 mb-2">Notifications</p>
+            <div className="space-y-2 text-sm">
+              <div className="bg-white/5 p-2 rounded">New deal created</div>
+              <div className="bg-white/5 p-2 rounded">AI suggests follow-up</div>
+              <div className="bg-white/5 p-2 rounded">Pipeline updated</div>
             </div>
           </div>
         )}
 
-        {/* 👤 NAME */}
-        <span className="text-sm text-white/70 hidden sm:block">
-          {fullName || email}
-        </span>
-
-        {/* 👤 AVATAR */}
+        {/* 👤 USER */}
         <div
           onClick={(e) => {
             e.stopPropagation()
@@ -191,54 +147,39 @@ export default function Topbar() {
             <img
               src={avatarUrl}
               alt="avatar"
-              className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/40"
+              className="w-10 h-10 rounded-full object-cover border border-blue-500"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white">
-              {(fullName || email)?.charAt(0)?.toUpperCase()}
+              {(fullName || email)?.charAt(0).toUpperCase()}
             </div>
           )}
 
-          {/* 🟢 ONLINE STATUS DOT */}
+          {/* 🟢 ONLINE DOT */}
           <span
             className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-black ${
-              isOnline ? "bg-green-500" : "bg-gray-400"
+              isOnline ? "bg-green-500" : "bg-gray-500"
             }`}
           />
         </div>
 
         {/* 👤 DROPDOWN */}
         {menuOpen && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute right-0 top-12 w-48 bg-black border border-white/10 rounded-xl shadow-xl"
-          >
-            <button
-              onClick={() => router.push("/dashboard")}
-              className="w-full text-left px-4 py-3 hover:bg-white/10"
-            >
-              Profile
-            </button>
-
-            <button
-              onClick={() => router.push("/dashboard/settings")}
-              className="w-full text-left px-4 py-3 hover:bg-white/10"
-            >
-              Settings
-            </button>
+          <div className="absolute right-0 top-12 w-48 bg-black border border-white/10 rounded-xl p-3 shadow-xl z-50">
+            <p className="text-sm text-white mb-2">{email}</p>
 
             <button
               onClick={toggleStatus}
-              className="w-full text-left px-4 py-3 hover:bg-white/10"
+              className="w-full text-left text-sm text-white/80 hover:text-white mb-2"
             >
               {isOnline ? "Go Offline" : "Go Online"}
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full text-left px-4 py-3 text-red-400 hover:bg-white/10"
+              className="w-full text-left text-sm text-red-400 hover:text-red-500"
             >
-              Log Out
+              Logout
             </button>
           </div>
         )}

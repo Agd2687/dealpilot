@@ -1,22 +1,18 @@
-
-import { Inter } from "next/font/google";
-import type { ReactNode } from "react";
-import "./globals.css";
-
-const inter = Inter({
-  subsets: ["latin"],
-});
-
-// ...existing code...
+import "./globals.css"
+import { LanguageProvider } from "@/app/context/LanguageContext"
 
 export default function RootLayout({
   children,
 }: {
-  children: ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body>
+        <LanguageProvider>
+          {children}
+        </LanguageProvider>
+      </body>
     </html>
-  );
+  )
 }

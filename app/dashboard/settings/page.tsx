@@ -1,510 +1,391 @@
 "use client"
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { supabase } from "@/lib/supabase"
+import { useLanguage } from "@/app/context/LanguageContext"
+import { translations } from "@/lib/translations"
 
-type Profile = {
+type Lang = "en" | "fr" | "es"
+
+type ProfileRow = {
   id: string
   full_name: string | null
-  email: string | null
+  company_name: string | null
+  job_title: string | null
   avatar_url: string | null
-  company_name?: string | null
-  job_title?: string | null
 }
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { lang, setLang } = useLanguage()
+  const t = translations[lang as keyof typeof translations] ?? translations.en
 
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   const [userId, setUserId] = useState("")
-  const [email, setEmail] = useState("")
   const [fullName, setFullName] = useState("")
-  const [companyName, setCompanyName] = useState("")
+  const [email, setEmail] = useState("")
+  const [company, setCompany] = useState("")
   const [jobTitle, setJobTitle] = useState("")
-  const [avatarUrl, setAvatarUrl] = useState("")
+  const [avatarPath, setAvatarPath] = useState<string | null>(null)
 
-  const [newPassword, setNewPassword] = useState("")
+  const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
 
-  const [message, setMessage] = useState("")
-  const [error, setError] = useState("")
+  const avatarSrc = useMemo(() => {
+    if (!avatarPath) return "/default-avatar.png"
 
- const avatarPreview = useMemo(() => {
-  if (!avatarUrl) return ""
+    if (avatarPath.startsWith("http://") || avatarPath.startsWith("https://")) {
+      return avatarPath
+    }
 
-  const { data } = supabase
-    .storage
-    .from("avatars")
-    .getPublicUrl(avatarUrl)
+    const { data } = supabase.storage.from("avatars").getPublicUrl(avatarPath)
+    return data.publicUrl
+  }, [avatarPath])
 
-  return data.publicUrl
-}, [avatarUrl])
   useEffect(() => {
     const loadUser = async () => {
-      try {
-        setLoading(true)
-        setError("")
-        setMessage("")
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
 
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser()
-
-        if (authError) throw authError
-
-        if (!user) {
-          router.push("/login")
-          return
-        }
-
-        setUserId(user.id)
-        setEmail(user.email ?? "")
-
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("id, full_name, email, avatar_url, company_name, job_title")
-          .eq("id", user.id)
-          .maybeSingle()
-
-        if (profileError) throw profileError
-
-        if (profile) {
-          setFullName(profile.full_name ?? "")
-          setCompanyName(profile.company_name ?? "")
-          setJobTitle(profile.job_title ?? "")
-          setAvatarUrl(profile.avatar_url ?? "")
-          setEmail(profile.email ?? user.email ?? "")
-        } else {
-          const starterProfile: Profile = {
-            id: user.id,
-            full_name: "",
-            email: user.email ?? "",
-            avatar_url: "",
-            company_name: "",
-            job_title: "",
-          }
-
-          const { error: insertError } = await supabase.from("profiles").upsert(starterProfile)
-
-          if (insertError) throw insertError
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load settings."
-        setError(message)
-      } finally {
-        setLoading(false)
+      if (!user) {
+        router.push("/login")
+        return
       }
+
+      setUserId(user.id)
+      setEmail(user.email ?? "")
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, company_name, job_title, avatar_url")
+        .eq("id", user.id)
+        .single()
+
+      if (!error && data) {
+        const profile = data as ProfileRow
+        setFullName(profile.full_name ?? "")
+        setCompany(profile.company_name ?? "")
+        setJobTitle(profile.job_title ?? "")
+        setAvatarPath(profile.avatar_url ?? null)
+      }
+
+      setLoading(false)
     }
 
     loadUser()
   }, [router])
 
-  const handleAvatarUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-  try {
-    const file = e.target.files?.[0]
+  const handleSaveProfile = async () => {
+    if (!userId) return
+    setSavingProfile(true)
+
+    const { error } = await supabase.from("profiles").upsert({
+      id: userId,
+      full_name: fullName.trim(),
+      company_name: company.trim(),
+      job_title: jobTitle.trim(),
+      avatar_url: avatarPath,
+    })
+
+    setSavingProfile(false)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    alert(t.saveProfileSuccess ?? "Profile saved successfully.")
+  }
+
+  const handlePasswordUpdate = async () => {
+    if (!password || !confirmPassword) {
+      alert(t.passwordRequired ?? "Please fill in both password fields.")
+      return
+    }
+
+    if (password !== confirmPassword) {
+      alert(t.passwordMismatch ?? "Passwords do not match.")
+      return
+    }
+
+    setSavingPassword(true)
+
+    const { error } = await supabase.auth.updateUser({ password })
+
+    setSavingPassword(false)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setPassword("")
+    setConfirmPassword("")
+    alert(t.passwordUpdatedSuccess ?? "Password updated successfully.")
+  }
+
+  const handleAvatarUpload = async (file: File | null) => {
     if (!file || !userId) return
 
     setUploadingAvatar(true)
 
-    const fileExt = file.name.split(".").pop()
-    const filePath = `${userId}/avatar-${Date.now()}.${fileExt}`
+    const safeName = file.name.replace(/\s+/g, "-")
+    const filePath = `${userId}/${Date.now()}-${safeName}`
 
     const { error } = await supabase.storage
       .from("avatars")
       .upload(filePath, file, { upsert: true })
 
-    if (error) throw error
-    const { data: publicUrlData } = supabase
-  .storage
-  .from("avatars")
-  .getPublicUrl(filePath)
-
-const newAvatarUrl = publicUrlData.publicUrl
-window.dispatchEvent(
-  new CustomEvent("avatarUpdated", {
-    detail: newAvatarUrl,
-  })
-)
-    // 💥 INSTANT PREVIEW
-    const { data } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(filePath)
-
-    setAvatarUrl(filePath)
-
-    // 💥 AUTO SAVE TO DB
-    await supabase
-      .from("profiles")
-      .update({ avatar_url: filePath })
-      .eq("id", userId)
-
-  } catch (err) {
-    console.error(err)
-  } finally {
     setUploadingAvatar(false)
-  }
-}
 
-  const handleSaveProfile = async (e: FormEvent) => {
-    e.preventDefault()
-
-    try {
-      setSavingProfile(true)
-      setError("")
-      setMessage("")
-
-      if (!userId) throw new Error("User not found.")
-
-      const payload = {
-        id: userId,
-        full_name: fullName.trim(),
-        email: email.trim(),
-        avatar_url: avatarUrl || null,
-        company_name: companyName.trim() || null,
-        job_title: jobTitle.trim() || null,
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error: profileError } = await supabase.from("profiles").upsert(payload)
-      if (profileError) throw profileError
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user?.email && email.trim() && email.trim() !== user.email) {
-        const { error: authUpdateError } = await supabase.auth.updateUser({
-          email: email.trim(),
-        })
-
-        if (authUpdateError) throw authUpdateError
-        setMessage("Profile saved. Check your email to confirm the new address.")
-        return
-      }
-
-      setMessage("Profile updated successfully.")
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save profile."
-      setError(message)
-    } finally {
-      setSavingProfile(false)
+    if (error) {
+      alert(error.message)
+      return
     }
+
+    setAvatarPath(filePath)
   }
 
-  const handlePasswordUpdate = async (e: FormEvent) => {
-    e.preventDefault()
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      t.deleteWarningConfirm ?? "Are you sure you want to delete your account?"
+    )
+    if (!confirmed || !userId) return
 
-    try {
-      setSavingPassword(true)
-      setError("")
-      setMessage("")
+    setDeletingAccount(true)
 
-      if (!newPassword || !confirmPassword) {
-        throw new Error("Please fill in both password fields.")
-      }
+    await supabase.from("profiles").delete().eq("id", userId)
+    await supabase.auth.signOut()
 
-      if (newPassword.length < 6) {
-        throw new Error("Password must be at least 6 characters.")
-      }
-
-      if (newPassword !== confirmPassword) {
-        throw new Error("Passwords do not match.")
-      }
-
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password: newPassword,
-      })
-
-      if (passwordError) throw passwordError
-
-      setNewPassword("")
-      setConfirmPassword("")
-      setMessage("Password updated successfully.")
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update password."
-      setError(message)
-    } finally {
-      setSavingPassword(false)
-    }
+    setDeletingAccount(false)
+    router.push("/login")
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white p-6 md:p-10">
-        <div className="mx-auto max-w-6xl animate-pulse space-y-6">
-          <div className="h-10 w-56 rounded-xl bg-white/10" />
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2 h-96 rounded-3xl bg-white/5 border border-white/10" />
-            <div className="h-96 rounded-3xl bg-white/5 border border-white/10" />
-          </div>
-          <div className="h-72 rounded-3xl bg-white/5 border border-white/10" />
-        </div>
+      <div className="mx-auto max-w-6xl p-6 text-white">
+        {t.loading ?? "Loading..."}
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 md:p-10">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.25em] text-blue-400/80">DealPilot</p>
-            <h1 className="text-3xl md:text-4xl font-bold">Settings</h1>
-            <p className="mt-2 text-sm text-white/60">
-              Manage your profile, security, workspace details, and account preferences.
-            </p>
-          </div>
-
-          <button
-            onClick={() => router.back()}
-            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
-          >
-            Back
-          </button>
-        </div>
-
-        {(message || error) && (
-          <div
-            className={`rounded-2xl border px-4 py-3 text-sm ${
-              error
-                ? "border-red-500/30 bg-red-500/10 text-red-200"
-                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-            }`}
-          >
-            {error || message}
-          </div>
-        )}
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-2xl backdrop-blur-xl">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Profile</h2>
-                <p className="mt-1 text-sm text-white/60">
-                  Update your personal details and how your account appears.
-                </p>
-              </div>
+    <div className="mx-auto max-w-7xl p-6 text-white">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm uppercase tracking-[0.2em] text-blue-400/80">
+                DealPilot
+              </p>
+              <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+                {t.settings}
+              </h1>
+              <p className="mt-2 text-white/60">
+                {t.settingsDesc}
+              </p>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-6">
-              <div className="flex flex-col gap-5 md:flex-row md:items-center">
-                <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl border border-white/10 bg-white/5">
-                  {avatarPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarPreview}
-                      alt="Avatar"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-2xl font-semibold text-white/50">
-                      {fullName?.trim()?.charAt(0)?.toUpperCase() || "D"}
-                    </span>
-                  )}
-                </div>
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium transition hover:bg-white/10"
+            >
+              {t.back}
+            </button>
+          </div>
 
-                <div className="space-y-3">
-                  <label className="inline-flex cursor-pointer items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/10">
-                    {uploadingAvatar ? "Uploading..." : "Upload Avatar"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleAvatarUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  <p className="text-xs text-white/50">
-                    Best results: square image, JPG or PNG.
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-[0_0_40px_rgba(255,255,255,0.04)]">
+            <h2 className="text-2xl font-semibold">{t.profile}</h2>
+            <p className="mt-1 text-sm text-white/60">{t.profileDesc}</p>
+
+            <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="h-24 w-24 overflow-hidden rounded-full border border-white/10 bg-black/40">
+                <Image
+                  src={avatarSrc}
+                  alt="Profile avatar"
+                  width={96}
+                  height={96}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="inline-flex cursor-pointer items-center rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium transition hover:bg-white/10">
+                  {uploadingAvatar ? t.uploadingAvatar : t.uploadAvatar}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    className="hidden"
+                    onChange={(e) => handleAvatarUpload(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+
+                  <p className="text-sm text-white/45">
+                  {t.avatarHint}
                   </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
-                />
-
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
-                />
-
-                <input
-                  type="text"
-                  placeholder="Company Name"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
-                />
-
-                <input
-                  type="text"
-                  placeholder="Job Title"
-                  value={jobTitle}
-                  onChange={(e) => setJobTitle(e.target.value)}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={savingProfile}
-                  className="rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {savingProfile ? "Saving..." : "Save Profile"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => router.push("/dashboard")}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/10"
-                >
-                  Go to Dashboard
-                </button>
-              </div>
-            </form>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 p-6 shadow-2xl backdrop-blur-xl">
-            <h2 className="text-xl font-semibold">Account Snapshot</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Quick view of your current workspace identity.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase tracking-wide text-white/40">Full Name</p>
-                <p className="mt-1 font-medium">{fullName || "Not set yet"}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase tracking-wide text-white/40">Email</p>
-                <p className="mt-1 font-medium break-all">{email || "No email found"}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase tracking-wide text-white/40">Company</p>
-                <p className="mt-1 font-medium">{companyName || "Not set yet"}</p>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <p className="text-xs uppercase tracking-wide text-white/40">Role / Title</p>
-                <p className="mt-1 font-medium">{jobTitle || "Not set yet"}</p>
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-2xl backdrop-blur-xl">
-            <h2 className="text-2xl font-semibold">Security</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Keep your account secure with a stronger password.
-            </p>
-
-            <form onSubmit={handlePasswordUpdate} className="mt-6 space-y-4">
+            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
               <input
-                type="password"
-                placeholder="New Password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder={t.fullName}
+                className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-blue-400/50"
               />
 
               <input
-                type="password"
-                placeholder="Confirm New Password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35 focus:border-blue-400/50"
+                value={email}
+                disabled
+                className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white/65 outline-none"
               />
+
+              <input
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                placeholder={t.company}
+                className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-blue-400/50"
+              />
+
+              <input
+                value={jobTitle}
+                onChange={(e) => setJobTitle(e.target.value)}
+                placeholder={t.role}
+                className="rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-blue-400/50"
+              />
+            </div>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                onClick={handleSaveProfile}
+                className="rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_30px_rgba(56,189,248,0.25)] transition hover:opacity-95"
+              >
+                {savingProfile ? t.saving : t.saveProfile}
+              </button>
 
               <button
-                type="submit"
-                disabled={savingPassword}
-                className="rounded-2xl bg-white text-black px-5 py-3 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => router.push("/dashboard")}
+                className="rounded-2xl border border-white/10 bg-white/5 px-6 py-3 text-sm font-medium transition hover:bg-white/10"
               >
-                {savingPassword ? "Updating..." : "Update Password"}
+                {t.goDashboard}
               </button>
-            </form>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-2xl backdrop-blur-xl">
-            <h2 className="text-2xl font-semibold">Workspace Preferences</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Placeholder section for future CRM settings.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div>
-                  <p className="font-medium">Email Notifications</p>
-                  <p className="text-sm text-white/50">Coming soon</p>
-                </div>
-                <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/50">
-                  Soon
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div>
-                  <p className="font-medium">Team Permissions</p>
-                  <p className="text-sm text-white/50">Admin controls coming soon</p>
-                </div>
-                <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/50">
-                  Soon
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div>
-                  <p className="font-medium">AI Preferences</p>
-                  <p className="text-sm text-white/50">Customize insights later</p>
-                </div>
-                <div className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/50">
-                  Soon
-                </div>
-              </div>
             </div>
           </div>
-        </div>
 
-        <div className="rounded-3xl border border-red-500/20 bg-red-500/5 p-6 shadow-2xl backdrop-blur-xl">
-          <h2 className="text-2xl font-semibold text-red-200">Danger Zone</h2>
-          <p className="mt-1 text-sm text-red-200/70">
-            Sensitive account actions should live here later.
-          </p>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-[0_0_40px_rgba(255,255,255,0.04)]">
+              <h2 className="text-2xl font-semibold">{t.security}</h2>
+              <p className="mt-1 text-sm text-white/60">{t.securityDesc}</p>
 
-          <div className="mt-5 flex flex-wrap gap-3">
+              <div className="mt-6 space-y-4">
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={t.newPassword}
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-blue-400/50"
+                />
+
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder={t.confirmPassword}
+                  className="w-full rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-blue-400/50"
+                />
+              </div>
+
+              <button
+                onClick={handlePasswordUpdate}
+                className="mt-6 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                {savingPassword ? t.updating ?? t.saving : t.updatePassword}
+              </button>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/10 to-white/5 p-6 shadow-[0_0_40px_rgba(255,255,255,0.04)]">
+              <h2 className="text-2xl font-semibold">{t.language}</h2>
+              <p className="mt-1 text-sm text-white/60">{t.languageDesc}</p>
+
+              <label className="mt-6 block text-sm text-white/45">
+                {t.language}
+              </label>
+
+              <select
+                aria-label="Language selector"
+                value={lang}
+                onChange={(e) => setLang(e.target.value as Lang)}
+                className="mt-2 w-full rounded-2xl border border-white/10 bg-black/40 px-5 py-4 text-white outline-none transition focus:border-blue-400/50"
+              >
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-red-500/20 bg-gradient-to-br from-red-500/10 to-red-900/10 p-6 shadow-[0_0_40px_rgba(239,68,68,0.08)]">
+            <h2 className="text-2xl font-semibold text-red-400">
+              {t.dangerZone ?? "Danger Zone"}
+            </h2>
+            <p className="mt-2 text-sm text-red-200/70">
+              {t.deleteWarning ?? "This action cannot be undone."}
+            </p>
+
             <button
-              type="button"
-              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+              onClick={handleDeleteAccount}
+              className="mt-6 rounded-2xl bg-red-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-red-600"
             >
-              Sign out other sessions
-            </button>
-
-            <button
-              type="button"
-              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
-            >
-              Delete account
+              {deletingAccount
+                ? t.deletingAccount ?? "Deleting..."
+                : t.deleteAccount ?? "Delete Account"}
             </button>
           </div>
         </div>
+
+        <aside className="rounded-3xl border border-cyan-400/10 bg-gradient-to-br from-cyan-500/10 via-blue-500/10 to-transparent p-6 shadow-[0_0_40px_rgba(6,182,212,0.08)] h-fit">
+          <p className="text-sm text-white/60">
+            {t.preview}
+          </p>
+
+          <div className="mt-6 space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                {t.fullName}
+              </p>
+              <p className="mt-2 text-lg font-medium">{fullName || "—"}</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                {t.email}
+              </p>
+              <p className="mt-2 text-lg font-medium break-all">{email || "—"}</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                {t.company}
+              </p>
+              <p className="mt-2 text-lg font-medium">{company || "—"}</p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <p className="text-xs uppercase tracking-wide text-white/35">
+                {t.role}
+              </p>
+              <p className="mt-2 text-lg font-medium">{jobTitle || "—"}</p>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   )

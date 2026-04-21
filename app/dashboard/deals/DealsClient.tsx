@@ -9,8 +9,8 @@ import {
 } from "@hello-pangea/dnd"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { translations } from "@/lib/translations"
 import { useRouter } from "next/navigation"
-
 type Deal = {
   id: string
   company: string
@@ -25,6 +25,17 @@ type InsightItem = {
 
 export default function DealsClient() {
   const router = useRouter()
+
+  const [lang, setLang] = useState<"en" | "fr" | "es">("en")
+  useEffect(() => {
+  const savedLang = localStorage.getItem("lang")
+
+  if (savedLang === "en" || savedLang === "fr" || savedLang === "es") {
+    setLang(savedLang)
+  }
+}, [])
+
+  const t = translations[lang]
 
   const [deals, setDeals] = useState<Deal[]>([])
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -133,22 +144,22 @@ export default function DealsClient() {
 
       {/* HEADER */}
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Deals Pipeline</h1>
+        <h1 className="text-3xl font-bold">{t.deals} {t.pipeline}</h1>
 
         <Link
           href="/dashboard/deals/new"
           className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-xl"
         >
-          + New Deal
+          + {t.newDeal}
         </Link>
       </div>
 
       {/* KPI */}
       <div className="grid grid-cols-4 gap-4">
-        <Card title="Deals" value={totalDeals} />
-        <Card title="Revenue" value={formatCurrency(totalRevenue)} />
-        <Card title="Closed" value={closedDeals.length} />
-        <Card title="Win Rate" value={`${winRate}%`} />
+        <Card title={t.deals} value={totalDeals} />
+        <Card title={t.revenue} value={formatCurrency(Number(totalRevenue || 0))} />
+        <Card title={t.closed} value={closedDeals.length} />
+        <Card title={t.winRate} value={`${winRate}%`} />
       </div>
 
       {/* AI */}

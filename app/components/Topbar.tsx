@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { supabase } from "@/lib/supabase"
-
+import { useLanguage } from "@/app/context/LanguageContext"
+import { translations } from "@/lib/translations"
 export default function Topbar() {
   const router = useRouter()
+  const { lang } = useLanguage()
+const t = translations[lang]
 
   // UI state
   const [avatarUrl, setAvatarUrl] = useState("")
@@ -189,9 +193,11 @@ export default function Topbar() {
           className="relative cursor-pointer"
         >
           {avatarUrl ? (
-  <img
+  <Image
     src={avatarUrl}
     alt="avatar"
+    width={40}
+    height={40}
     className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/40"
   />
 ) : (

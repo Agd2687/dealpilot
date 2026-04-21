@@ -1,63 +1,67 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Briefcase,
   Users,
   CheckSquare,
   Settings,
-} from "lucide-react";
+} from "lucide-react"
 
-const navItems = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Deals", href: "/dashboard/deals", icon: Briefcase },
-  { name: "Leads", href: "/dashboard/leads", icon: Users },
-  { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
-];
+import { useLanguage } from "@/app/context/LanguageContext"
+import { translations } from "@/lib/translations"
+
+type Lang = "en" | "fr" | "es"
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname()
+
+  // ✅ SAFE TYPE
+  const { lang } = useLanguage()
+  const t = translations[lang as Lang]
+
+  // ✅ NAV ITEMS (clean + stable)
+  const navItems = [
+    { name: t.dashboard, href: "/dashboard", icon: LayoutDashboard },
+    { name: t.deals, href: "/dashboard/deals", icon: Briefcase },
+    { name: t.leads, href: "/dashboard/leads", icon: Users },
+    { name: t.tasks, href: "/dashboard/tasks", icon: CheckSquare },
+    { name: t.settings, href: "/dashboard/settings", icon: Settings },
+  ]
 
   return (
     <aside className="w-64 bg-zinc-900 border-r border-white/10 px-6 py-6 flex flex-col">
       
       {/* Logo */}
       <div className="mb-8">
-        <h1 className="text-lg font-semibold tracking-tight text-white">
-          DealPilot
-        </h1>
-        <p className="text-xs text-white/40 mt-1">
-          CRM Dashboard
-        </p>
+        <h1 className="text-lg font-semibold text-white">DealPilot</h1>
+        <p className="text-xs text-white/40">CRM Dashboard</p>
       </div>
 
-      {/* Navigation */}
-      <nav className="space-y-1">
+      {/* Nav */}
+      <nav className="flex flex-col gap-2">
         {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
-          const Icon = item.icon;
+          const Icon = item.icon
+          const active = pathname === item.href
 
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={[
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
-                isActive
-                  ? "bg-white/10 text-white ring-1 ring-white/15 shadow-[0_0_1px_rgba(255,255,255,0.06)]"
-                  : "text-white/50 hover:bg-white/5 hover:text-white",
-              ].join(" ")}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition ${
+                active
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="truncate">{item.name}</span>
+              <Icon size={18} />
+              {item.name}
             </Link>
-          );
+          )
         })}
       </nav>
-
     </aside>
-  );
+  )
 }

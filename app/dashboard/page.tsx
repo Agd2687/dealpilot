@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { useLanguage } from "@/app/context/LanguageContext"
+import { translations } from "@/lib/translations"
 import {
   BarChart,
   Bar,
@@ -26,6 +28,15 @@ type Deal = {
 
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4"]
 
+const COLOR_CLASSES = [
+  "bg-[#3b82f6]",
+  "bg-[#22c55e]",
+  "bg-[#f59e0b]",
+  "bg-[#a855f7]",
+  "bg-[#ef4444]",
+  "bg-[#06b6d4]",
+]
+
 const STAGES = [
   "Prospect",
   "Qualified",
@@ -35,10 +46,14 @@ const STAGES = [
   "Closed Lost",
 ]
 
-export default function DashboardPage() {
+  export default function DashboardPage() {
+
+  // 🌍 LANGUAGE (ADD THIS)
+  const { lang } = useLanguage()
+  const t = translations[lang]
+
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
-
   async function loadDeals() {
     const { data, error } = await supabase
       .from("deals")
@@ -192,10 +207,12 @@ export default function DashboardPage() {
     <div className="space-y-8 p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Executive Dashboard</h1>
+         <h1 className="text-3xl font-bold">
+  {t.dashboardTitle || "Executive Dashboard"}
+</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Premium sales overview with insights, forecasting, and activity.
-          </p>
+  {t.dashboardDesc || "Premium sales overview with insights, forecasting, and activity."}
+</p>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -372,8 +389,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-2 rounded-xl bg-slate-800/60 px-3 py-2"
               >
                 <div
-                  className="inline-block h-3 w-3 rounded-full"
-                  style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  className={`inline-block h-3 w-3 rounded-full ${COLOR_CLASSES[index % COLOR_CLASSES.length]}`}
                 />
                 <span>{item.name}</span>
               </div>

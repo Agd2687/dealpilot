@@ -5,26 +5,26 @@ import { NextRequest, NextResponse } from "next/server"
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
-    const file = formData.get("file") as File
+    const file = formData.get("file")
 
-    if (!file) {
+    // ✅ SAFE validation
+    if (!file || !(file instanceof File)) {
       return NextResponse.json(
-        { error: "No file uploaded" },
+        { error: "No valid file uploaded" },
         { status: 400 }
       )
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    // ✅ SAFE dynamic import (this fixes Vercel)
-    const pdfParse = await import("pdf-parse").then(
-      (mod) => mod.default || mod
-    )
+    // ✅ FIXED import (no Vercel issues)
+    const pdfModule: any = await import("pdf-parse")
+    const pdfParse = pdfModule.default ?? pdfModule
 
     const data = await pdfParse(buffer)
 
     return NextResponse.json({
-      extractedText: data.text,
+      extractedText: data?.text ?? "",
     })
 
   } catch (err) {

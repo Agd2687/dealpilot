@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Pencil, Trash2, Sparkles } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { ArrowLeft, Pencil, Sparkles, Trash2 } from "lucide-react"
+import { useParams, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 
 type Deal = {
   id: string
@@ -47,19 +47,25 @@ export default function DealDetailsPage() {
 
   // 🔥 LOAD NOTES
   const loadNotes = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("notes")
       .select("*")
       .eq("deal_id", dealId)
       .order("created_at", { ascending: false })
 
-    setNotes(data || [])
+    if (error) {
+      console.error("Notes error:", error)
+      setNotes([])
+      return
+    }
+
+    setNotes((data as Note[]) ?? [])
   }
 
   useEffect(() => {
     loadDeal()
     loadNotes()
-  }, [])
+  }, [dealId])
 
   // 🔥 ADD NOTE
   const addNote = async () => {
@@ -79,9 +85,16 @@ export default function DealDetailsPage() {
     try {
       setLoadingAI(true)
 
+      // ✅ Prevent null deal crash
+      if (!deal) {
+        console.error("No deal loaded")
+        return
+      }
+
       const formData = new FormData()
       formData.append("deal", JSON.stringify(deal))
 
+      // ✅ optional file
       if (file) {
         formData.append("file", file)
       }
@@ -91,14 +104,21 @@ export default function DealDetailsPage() {
         body: formData,
       })
 
+      // ✅ handle bad response
+      if (!res.ok) {
+        const errText = await res.text()
+        console.error("API ERROR:", errText)
+        return
+      }
+
       const data = await res.json()
 
-      // ✅ FIXED RESPONSE
-      setAiInsight(data)
-      setScore(data.score)
+      // ✅ prevent undefined crash
+      setAiInsight(data || null)
+      setScore(data?.score ?? null)
 
     } catch (err) {
-      console.error("AI error:", err)
+      console.error("AI ERROR:", err)
     } finally {
       setLoadingAI(false)
     }

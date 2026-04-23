@@ -1,24 +1,36 @@
-import pdfParse from "pdf-parse"
+export const runtime = "nodejs"
 
-export async function POST(req: Request) {
+import { NextRequest, NextResponse } from "next/server"
+
+export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file = formData.get("file") as File
 
     if (!file) {
-      return Response.json({ error: "No file uploaded" }, { status: 400 })
+      return NextResponse.json(
+        { error: "No file uploaded" },
+        { status: 400 }
+      )
     }
 
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    const buffer = Buffer.from(await file.arrayBuffer())
 
-    const parsed = await pdfParse(buffer)
+    // ✅ FIXED IMPORT (works in Vercel)
+    const pdfParse = await import("pdf-parse").then(
+      (mod) => mod.default || mod
+    )
 
-    return Response.json({
-      text: parsed.text,
+    const data = await pdfParse(buffer)
+
+    return NextResponse.json({
+      extractedText: data.text,
     })
-  } catch (error) {
-    console.error(error)
-    return Response.json({ error: "PDF failed" }, { status: 500 })
+  } catch (err) {
+    console.error("PDF ERROR:", err)
+    return NextResponse.json(
+      { error: "PDF parsing failed" },
+      { status: 500 }
+    )
   }
 }

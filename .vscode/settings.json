@@ -4,9 +4,11 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest) {
   try {
+    // ✅ FIX 1: GET FORM DATA
     const formData = await req.formData()
     const file = formData.get("file")
 
+    // ✅ VALIDATION
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
         { error: "No valid file uploaded" },
@@ -16,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    // ✅ SAFE IMPORT (ONLY THIS)
+    // ✅ SAFE IMPORT (VERCEL SAFE)
     const pdfModule: any = await import("pdf-parse")
     const pdfParse = pdfModule.default || pdfModule
 

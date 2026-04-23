@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
-    // ✅ FIXED IMPORT (works in Vercel)
+    // ✅ SAFE dynamic import (this fixes Vercel)
     const pdfParse = await import("pdf-parse").then(
       (mod) => mod.default || mod
     )
@@ -26,8 +26,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       extractedText: data.text,
     })
+
   } catch (err) {
     console.error("PDF ERROR:", err)
+
     return NextResponse.json(
       { error: "PDF parsing failed" },
       { status: 500 }

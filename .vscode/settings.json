@@ -1,15 +1,36 @@
-{
-  "git.ignoreLimitWarning": true,
+export const runtime = "nodejs"
 
-  "files.autoSave": "afterDelay",
-  "files.autoSaveDelay": 500,
+import { NextRequest, NextResponse } from "next/server"
 
-  "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit",
-    "source.organizeImports": "explicit"
-  },
+export async function POST(req: NextRequest) {
+  try {
+    const formData = await req.formData()
+    const file = formData.get("file")
 
-  "eslint.validate": ["javascript", "typescript", "typescriptreact"],
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json(
+        { error: "No valid file uploaded" },
+        { status: 400 }
+      )
+    }
 
-  "editor.formatOnSave": true
+    const buffer = Buffer.from(await file.arrayBuffer())
+
+    // ✅ SAFE IMPORT (ONLY THIS)
+    const pdfModule: any = await import("pdf-parse")
+    const pdfParse = pdfModule.default || pdfModule
+
+    const data = await pdfParse(buffer)
+
+    return NextResponse.json({
+      extractedText: data?.text || "",
+    })
+  } catch (err) {
+    console.error("PDF ERROR:", err)
+
+    return NextResponse.json(
+      { error: "PDF parsing failed" },
+      { status: 500 }
+    )
+  }
 }
